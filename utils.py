@@ -134,7 +134,6 @@ class GitHubAPI:
             path
         )
         response = self.put(url, data)
-        print(response)
 
     def create_blob(self, content):
         encoded = str(base64.b64encode(content).decode("utf-8"))
@@ -235,7 +234,7 @@ def driver():
         )
         path = "{}{}".format(
             directory,
-            url["name"].split("-")[0]
+            url["name"].split('–')[0]
         )
         github_client.create_file(
             content,
