@@ -120,10 +120,10 @@ class GitHubAPI:
         # This worked
         encoded = str(base64.b64encode(content).decode("utf-8"))
         data = {
-            "message":"test",
-            "committer":{
-                "name":"sreehari1997",
-                "email":"sreehaivijayan619@gmail.com"
+            "message": datetime.datetime.now().strftime("%d %B, %Y"),
+            "committer": {
+                "name": "sreehari1997",
+                "email": "sreehaivijayan619@gmail.com"
             },
             "content": encoded
         }
