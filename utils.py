@@ -234,7 +234,7 @@ def driver():
         )
         path = "{}{}.pdf".format(
             directory,
-            url["name"].split('–')[0]
+            url["name"].replace("/", "-")
         )
         github_client.create_file(
             content,
