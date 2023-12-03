@@ -1,3 +1,4 @@
+import datetime
 import base64
 import requests
 from bs4 import BeautifulSoup
@@ -115,7 +116,7 @@ class GitHubAPI:
         else:
             return None
 
-    def create_file(self, content):
+    def create_file(self, content, path):
         # This worked
         encoded = str(base64.b64encode(content).decode("utf-8"))
         data = {
@@ -130,7 +131,7 @@ class GitHubAPI:
             self.base_url,
             self.owner,
             self.repo,
-            "2023/december/test.pdf"
+            path
         )
         response = self.put(url, data)
         print(response)
@@ -215,3 +216,28 @@ class GitHubAPI:
             return response
         else:
             return None
+
+
+def driver():
+    github_client = GitHubAPI()
+    soup = get_soup(URL)
+    urls = get_pdf_urls(soup)
+    now = datetime.datetime.now()
+    directory = "{}/{}/{}/".format(
+        now.year,
+        now.month,
+        now.day
+    )
+    for url in urls:
+        #def create_file(self, content, path):
+        content = github_client.get_blob(
+            url["url"]
+        )
+        path = "{}{}".format(
+            directory,
+            url["name"].split("-")[0]
+        )
+        github_client.create_file(
+            content,
+            path
+        )
