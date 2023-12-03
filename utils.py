@@ -232,7 +232,7 @@ def driver():
         content = github_client.get_blob(
             url["url"]
         )
-        path = "{}{}".format(
+        path = "{}{}.pdf".format(
             directory,
             url["name"].split('–')[0]
         )
