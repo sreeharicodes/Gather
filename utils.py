@@ -102,7 +102,7 @@ class GitHubAPI:
         except requests.exceptions.RequestException:
             return None
 
-    def get_last_commit(self):
+    def get_last_commit_sha(self):
         # https://api.github.com/repos/sreehari1997/Gather/branches/main
         url = "{}/{}/{}/branches/{}".format(
             self.base_url,
@@ -116,11 +116,25 @@ class GitHubAPI:
         else:
             return None
 
-    def create_file(self, content, path):
+    def get_last_commit_message(self):
+        # https://api.github.com/repos/sreehari1997/Gather/branches/main
+        url = "{}/{}/{}/branches/{}".format(
+            self.base_url,
+            self.owner,
+            self.repo,
+            self.branch
+        )
+        data = self.get(url)
+        if data:
+            return data["commit"]["message"]
+        else:
+            return None
+
+    def create_file(self, content, path, commit_message):
         # This worked
         encoded = str(base64.b64encode(content).decode("utf-8"))
         data = {
-            "message": datetime.datetime.now().strftime("%d %B, %Y"),
+            "message": commit_message,
             "committer": {
                 "name": "sreehari1997",
                 "email": "sreehaivijayan619@gmail.com"
@@ -134,6 +148,7 @@ class GitHubAPI:
             path
         )
         response = self.put(url, data)
+        return response
 
     def create_blob(self, content):
         encoded = str(base64.b64encode(content).decode("utf-8"))
@@ -219,24 +234,28 @@ class GitHubAPI:
 
 def driver():
     github_client = GitHubAPI()
-    soup = get_soup(URL)
-    urls = get_pdf_urls(soup)
     now = datetime.datetime.now()
-    directory = "{}/{}/{}/".format(
-        now.year,
-        now.month,
-        now.day
-    )
-    for url in urls:
-        #def create_file(self, content, path):
-        content = github_client.get_blob(
-            url["url"]
+    last_commit_message = github_client.get_last_commit_message()
+    time_str = now.strftime("%d-%m-%Y")
+    if last_commit_message != time_str:
+        soup = get_soup(URL)
+        urls = get_pdf_urls(soup)
+        directory = "{}/{}/{}/".format(
+            now.year,
+            now.month,
+            now.day
         )
-        path = "{}{}.pdf".format(
-            directory,
-            url["name"].replace("/", "-")
-        )
-        github_client.create_file(
-            content,
-            path
-        )
+        for url in urls:
+            #def create_file(self, content, path):
+            content = github_client.get_blob(
+                url["url"]
+            )
+            path = "{}{}.pdf".format(
+                directory,
+                url["name"].replace("/", "-")
+            )
+            github_client.create_file(
+                content,
+                path,
+                time_str
+            )
