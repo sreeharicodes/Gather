@@ -126,7 +126,7 @@ class GitHubAPI:
         )
         data = self.get(url)
         if data:
-            return data["commit"]["message"]
+            return data["commit"]["commit"]["message"]
         else:
             return None
 
@@ -232,12 +232,26 @@ class GitHubAPI:
             return None
 
 
+def is_todays_data(filename, now):
+    try:
+        date_str = filename.split('–')[1].strip()
+        date_str = date_str.split(".")[0]
+        today = now.strftime("%d/%m/%Y")
+        if today == date_str:
+            return True
+    except Exception as e:
+        print(e)
+
+    return False
+
+
 def driver():
     github_client = GitHubAPI()
     now = datetime.datetime.now()
     last_commit_message = github_client.get_last_commit_message()
     time_str = now.strftime("%d-%m-%Y")
     if last_commit_message != time_str:
+        print("Pushing....")
         soup = get_soup(URL)
         urls = get_pdf_urls(soup)
         directory = "{}/{}/{}/".format(
@@ -246,16 +260,22 @@ def driver():
             now.day
         )
         for url in urls:
-            #def create_file(self, content, path):
-            content = github_client.get_blob(
-                url["url"]
-            )
-            path = "{}{}.pdf".format(
-                directory,
-                url["name"].replace("/", "-")
-            )
-            github_client.create_file(
-                content,
-                path,
-                time_str
-            )
+            if is_todays_data(url["name"], now):
+                content = github_client.get_blob(
+                    url["url"]
+                )
+                path = "{}{}.pdf".format(
+                    directory,
+                    url["name"].replace("/", "-")
+                )
+                data = github_client.create_file(
+                    content,
+                    path,
+                    time_str
+                )
+                print(data)
+    else:
+        print("not pushing..")
+
+if __name__ == "__main__":
+    driver()
