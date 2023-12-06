@@ -264,9 +264,10 @@ def driver():
                 content = github_client.get_blob(
                     url["url"]
                 )
+                filename = url["name"].split(".")[0]
                 path = "{}{}.pdf".format(
                     directory,
-                    url["name"].replace("/", "-")
+                    filename.replace("/", "-")
                 )
                 data = github_client.create_file(
                     content,
