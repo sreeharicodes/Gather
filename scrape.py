@@ -29,7 +29,7 @@ def driver():
         now = datetime.now()
         time_str = now.strftime("%d-%m-%Y")
         last_commit_msg = github_client.get_last_commit_message()
-        if last_commit_msg and last_commit_msg == now.strftime("%d-%m-%Y"):
+        if last_commit_msg and last_commit_msg != time_str:
             directory = "{}/{}/{}/".format(
                 now.year,
                 now.month,
