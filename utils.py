@@ -1,36 +1,110 @@
-import datetime
-import base64
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 from decouple import config
+import base64
 
 
-URL = "https://sdma.kerala.gov.in/dam-water-level/"
+class WebScraper:
+
+    def __init__(self, url):
+        self.url = url
+
+    def get_soup(self):
+        try:
+            response = requests.get(self.url)
+            response.raise_for_status()
+            if response.status_code == 200:
+                return BeautifulSoup(response.text, "html.parser")
+        except requests.exceptions.RequestException:
+            return None
+
+    def get_blob(self):
+        try:
+            response = requests.get(self.url)
+            return response.content
+        except requests.exceptions.RequestException:
+            return None
+
+    @staticmethod
+    def clean_name(name):
+        return name.strip().replace("/", "-").replace(".", "-")
 
 
-def get_soup(url):
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            return BeautifulSoup(response.text, "html.parser")
-    except requests.exceptions.RequestException:
-        return None
+class DamScraper(WebScraper):
+    data = []
+
+    @staticmethod
+    def is_todays_data(filename):
+        try:
+            date_str = filename.split('–')[1].strip()
+            date_str = date_str.split(".")[0]
+            today = datetime.now().strftime("%d/%m/%Y")
+            if today == date_str:
+                return True
+        except Exception:
+            pass
+
+        return False
+
+    def get_source_urls(self, filetype="pdf"):
+        soup = self.get_soup()
+        if soup:
+            div = soup.find("div", class_="entry-content")
+            li_tags = div.find_all("li")
+            for li in li_tags:
+                name = li.text.strip()
+                if self.is_todays_data(name):
+                    a_tag = li.find('a', href=True)
+                    href = a_tag.attrs.get("href")
+                    self.data.append({
+                        "name": self.clean_name(name),
+                        "url": href,
+                        "type": filetype
+                    })
+
+        return self.data
 
 
-def get_pdf_urls(soup):
-    urls = []
-    div = soup.find("div", class_="entry-content")
-    li_tags = div.find_all("li")
-    for li in li_tags:
-        name = li.text.strip()
-        a_tag = li.find('a', href=True)
-        href = a_tag.attrs.get("href")
-        urls.append({
-            "name": name,
-            "url": href
-        })
+class RiverScraper(WebScraper):
+    data = []
 
-    return urls
+    @staticmethod
+    def is_todays_data(date_str):
+        try:
+            date_str = date_str.split('M')[1].strip()
+            today = datetime.now().strftime("%d.%m.%Y")
+            if today == date_str:
+                return True
+        except Exception:
+            pass
+
+        return False
+
+    def get_source_urls(self, filetype="jpeg"):
+        soup = self.get_soup()
+        if soup:
+            div = soup.find("div", class_="entry-content")
+            p_tags = div.find_all("p")
+            try:
+                p_tags = p_tags[1:4]
+            except IndexError:
+                return self.data
+
+            date_str = p_tags.pop(-1)
+            if self.is_todays_data(date_str.text):
+                for p in p_tags:
+                    name = p.text.strip()
+                    a_tag = p.find('a', href=True)
+                    href = a_tag.attrs.get("href")
+                    self.data.append({
+                        "name": self.clean_name(name),
+                        "url": href,
+                        "type": filetype
+                    })
+
+        return self.data
+
 
 class GitHubAPI:
     def __init__(self):
@@ -62,28 +136,6 @@ class GitHubAPI:
         except requests.exceptions.RequestException:
             return None
 
-    def post(self, url, data):
-        try:
-            response = requests.post(
-                url,
-                headers=self.get_headers(),
-                data=data
-            )
-            return response.json()
-        except requests.exceptions.RequestException:
-            return None
-
-    def patch(self, url, data):
-        try:
-            response = requests.patch(
-                url,
-                headers=self.get_headers(),
-                data=data
-            )
-            return response.json()
-        except requests.exceptions.RequestException:
-            return None
-
     def put(self, url, data):
         try:
             response = requests.put(
@@ -95,29 +147,7 @@ class GitHubAPI:
         except requests.exceptions.RequestException:
             return None
 
-    def get_blob(self, url):
-        try:
-            response = requests.get(url)
-            return response.content
-        except requests.exceptions.RequestException:
-            return None
-
-    def get_last_commit_sha(self):
-        # https://api.github.com/repos/sreehari1997/Gather/branches/main
-        url = "{}/{}/{}/branches/{}".format(
-            self.base_url,
-            self.owner,
-            self.repo,
-            self.branch
-        )
-        data = self.get(url)
-        if data:
-            return data["commit"]["sha"]
-        else:
-            return None
-
     def get_last_commit_message(self):
-        # https://api.github.com/repos/sreehari1997/Gather/branches/main
         url = "{}/{}/{}/branches/{}".format(
             self.base_url,
             self.owner,
@@ -131,7 +161,6 @@ class GitHubAPI:
             return None
 
     def create_file(self, content, path, commit_message):
-        # This worked
         encoded = str(base64.b64encode(content).decode("utf-8"))
         data = {
             "message": commit_message,
@@ -149,134 +178,3 @@ class GitHubAPI:
         )
         response = self.put(url, data)
         return response
-
-    def create_blob(self, content):
-        encoded = str(base64.b64encode(content).decode("utf-8"))
-        data = {
-            "content": encoded,
-            "encoding": "base64"
-        }
-        url = "{}/{}/{}/git/blobs".format(
-            self.base_url,
-            self.owner,
-            self.repo
-        )
-        response = self.post(url, data)
-        if response:
-            print(response)
-            return response["sha"]
-        else:
-            return None
-
-    def create_tree(self, commit_sha, blob_sha):
-        data = {
-          "base_tree": commit_sha,
-          "tree": [
-            {
-              "path": "2023/December/Water Levels of Main Reservoirs (KSEB) - 03/12/2023.pdf",
-              "mode": "100644",
-              "type": "blob",
-              "sha": blob_sha
-            }
-          ]
-        }
-        url = "{}/{}/{}/git/trees/".format(
-            self.base_url,
-            self.owner,
-            self.repo
-        )
-        response = self.post(url, data)
-        if response:
-            return response["sha"]
-        else:
-            return None
-
-    def create_commit(self, commit_sha, tree_sha):
-        data = {
-          "message": "Add new files at once programatically",
-          "author": {
-            "name": "sreehari1997",
-            "email": "sreeharivijayan619@gmail.com"
-          },
-          "parents": [
-            commit_sha
-          ],
-          "tree": tree_sha
-        }
-        url = "{}/{}/{}/git/commits/".format(
-            self.base_url,
-            self.owner,
-            self.repo
-        )
-        response = self.post(url, data)
-        if response:
-            return response["sha"]
-        else:
-            return None
-
-
-    def update_reference(self, commit_sha):
-        data = {
-            "sha": commit_sha
-        }
-        url = "{}/{}/{}/git/refs/heads/{}".format(
-            self.base_url,
-            self.owner,
-            self.repo,
-            self.branch
-        )
-        response = self.post(url, data)
-        if response:
-            return response
-        else:
-            return None
-
-
-def is_todays_data(filename, now):
-    try:
-        date_str = filename.split('–')[1].strip()
-        date_str = date_str.split(".")[0]
-        today = now.strftime("%d/%m/%Y")
-        if today == date_str:
-            return True
-    except Exception as e:
-        print(e)
-
-    return False
-
-
-def driver():
-    github_client = GitHubAPI()
-    now = datetime.datetime.now()
-    last_commit_message = github_client.get_last_commit_message()
-    time_str = now.strftime("%d-%m-%Y")
-    if last_commit_message != time_str:
-        print("Pushing....")
-        soup = get_soup(URL)
-        urls = get_pdf_urls(soup)
-        directory = "{}/{}/{}/".format(
-            now.year,
-            now.month,
-            now.day
-        )
-        for url in urls:
-            if is_todays_data(url["name"], now):
-                content = github_client.get_blob(
-                    url["url"]
-                )
-                filename = url["name"].split(".")[0]
-                path = "{}{}.pdf".format(
-                    directory,
-                    filename.replace("/", "-")
-                )
-                data = github_client.create_file(
-                    content,
-                    path,
-                    time_str
-                )
-                print(data)
-    else:
-        print("not pushing..")
-
-if __name__ == "__main__":
-    driver()
